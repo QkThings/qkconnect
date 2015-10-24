@@ -1,5 +1,6 @@
 #include "qkconnserial.h"
 #include "qkconnect_global.h"
+#include "qkprotocolserial.h"
 
 #include <QDebug>
 #include <QSerialPort>
@@ -12,6 +13,11 @@ QkConnSerial::QkConnSerial(const Descriptor &desc, QObject *parent) :
     _desc = desc;
     _dtr = false;
     _sp = new QSerialPort(this);
+    _protocol = new QkProtocolSerial(this);
+    connect(_protocol, SIGNAL(serialOut(QByteArray)),
+            this, SLOT(sendData(QByteArray)));
+    connect(_protocol, SIGNAL(packetGenerated(QJsonDocument)),
+            this, SIGNAL(packetIn(QJsonDocument)));
 }
 
 void QkConnSerial::listAvailable()
@@ -33,7 +39,6 @@ void QkConnSerial::listAvailable()
                info.description().toStdString().c_str());
     }
 }
-
 
 bool QkConnSerial::open()
 {
@@ -87,8 +92,16 @@ void QkConnSerial::sendData(QByteArray data)
     _sp->write(data);
 }
 
+void QkConnSerial::sendPacket(QJsonDocument doc)
+{
+    qDebug() << __PRETTY_FUNCTION__;
+    _protocol->translatePacket(doc);
+}
 
 void QkConnSerial::_slotReadyRead()
 {
-    emit dataIn(_sp->readAll());
+    QByteArray data = _sp->readAll();
+    _protocol->parseData(data);
+
+    emit dataIn(data);
 }

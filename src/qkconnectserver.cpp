@@ -7,11 +7,13 @@
 #include <QQueue>
 #include <QEventLoop>
 #include <QTimer>
+#include <QJsonObject>
+#include <QJsonValue>
 
 QkConnectServer::QkConnectServer(QString ip, int port, QObject *parent) :
     QkServer(ip, port, parent)
 {
-    _parseMode = false;
+    _parseMode = ParseModeJSON;
     _protocolIn = new Qk::Protocol(this);
     _protocolOut = new Qk::Protocol(this);
 
@@ -19,11 +21,17 @@ QkConnectServer::QkConnectServer(QString ip, int port, QObject *parent) :
             this, SLOT(handleFrameIn(QByteArray,bool)));
     connect(_protocolOut, SIGNAL(parsedFrame(QByteArray,bool)),
             this, SLOT(handleFrameOut(QByteArray,bool)));
+
+    connect(&_jsonInParser, SIGNAL(parsed(QJsonDocument)),
+            this, SLOT(handleJsonIn(QJsonDocument)));
+
+    ADD_RPC_METHOD(quit);
+    //_rpc_map.insert("quit", &QkConnectServer::rpc_quit);
 }
 
-void QkConnectServer::setParseMode(bool parse)
+void QkConnectServer::setParseMode(ParseMode mode)
 {
-    _parseMode = parse;
+    _parseMode = mode;
 }
 
 void QkConnectServer::setOptions(int options)
@@ -33,7 +41,7 @@ void QkConnectServer::setOptions(int options)
 
 void QkConnectServer::run()
 {
-    if(_parseMode)
+    /*if(_parseMode)
     {
         QEventLoop eventLoop;
         QTimer timer;
@@ -51,7 +59,7 @@ void QkConnectServer::run()
             eventLoop.processEvents();
 
             _mutex.lock();
-            framesInCount = _framesInQueue.count();
+            framesInCount = _dataInQueue.count();
             alive = _alive;
             _mutex.unlock();
 
@@ -61,7 +69,7 @@ void QkConnectServer::run()
             if(framesInCount > 0)
             {
                 _mutex.lock();
-                QByteArray frame = _framesInQueue.dequeue();
+                QByteArray frame = _dataInQueue.dequeue();
                 frameReceived = _frameReceived = false;
                 _mutex.unlock();
 
@@ -80,38 +88,72 @@ void QkConnectServer::run()
                     qDebug() << "timeout! can't get a frame from connection";
             }
         }
-    }
+    }*/
 }
 
 
 void QkConnectServer::handleDataIn(int socketDesc, QByteArray data)
 {
-    if(_parseMode)
+    switch(_parseMode)
     {
-        _protocolIn->parseData(data, true);
-    }
-    else
-    {
+    case ParseModeRaw:
         emit dataIn(data);
+        break;
+    case ParseModeProtocol:
+        _protocolIn->parseData(data, true);
+        break;
+    case ParseModeJSON:
+        _jsonInParser.parseData(data);
+        break;
+    default:
+        qFatal("ERROR: unknown parse mode");
     }
+
+//    if(_parseMode)
+//    {
+//        _protocolIn->parseData(data, true);
+//    }
+//    else
+//    {
+//        emit dataIn(data);
+//    }
 }
 
 void QkConnectServer::sendData(QByteArray data)
 {
-    if(_parseMode)
+    switch(_parseMode)
     {
-        _protocolOut->parseData(data, true);
-    }
-    else
-    {
+    case ParseModeRaw:
         emit dataOut(data);
+        break;
+    case ParseModeProtocol:
+        _protocolOut->parseData(data, true);
+        break;
+    case ParseModeJSON:
+        break;
+    default:
+        qFatal("ERROR: unknown parse mode");
     }
+
+//    if(_parseMode)
+//    {
+//        _protocolOut->parseData(data, true);
+//    }
+//    else
+//    {
+//        emit dataOut(data);
+//    }
+}
+
+void QkConnectServer::sendPacket(QJsonDocument doc)
+{
+    emit dataOut(doc.toJson(QJsonDocument::Compact));
 }
 
 void QkConnectServer::handleFrameIn(QByteArray frame, bool raw)
 {
     _mutex.lock();
-    _framesInQueue.enqueue(frame);
+    _dataInQueue.enqueue(frame);
     _mutex.unlock();
 }
 
@@ -138,6 +180,25 @@ void QkConnectServer::handleFrameOut(QByteArray frame, bool raw)
 
 }
 
+void QkConnectServer::handleJsonIn(QJsonDocument doc)
+{
+    QJsonObject obj = doc.object();
+    QStringList obj_keys = obj.keys();
+    if(obj_keys.contains("pkt"))
+    {
+        emit dataIn(doc.toJson(QJsonDocument::Compact));
+        emit packetIn(doc);
+    }
+    else if(obj_keys.contains("rpc"))
+    {
+        emit message(QKCONNECT_MESSAGE_INFO, "RPC RECEIVED");
+    }
+    else
+    {
+        emit message(QKCONNECT_MESSAGE_ERROR, "Unknown JSON data");
+    }
+}
+
 void QkConnectServer::_slotClientConnected(int socketDesc)
 {
     QkServer::_slotClientConnected(socketDesc);
@@ -160,5 +221,10 @@ void QkConnectServer::_slotClientDisconnected(int socketDesc)
     emit message(QKCONNECT_MESSAGE_INFO, byeMsg);
 
     QkServer::_slotClientDisconnected(socketDesc);
+}
+
+int QkConnectServer::rpc_quit(RPCArgs *args)
+{
+    qDebug() << __PRETTY_FUNCTION__;
 }
 

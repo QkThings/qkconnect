@@ -100,6 +100,7 @@ void MainWindow::slotDisconnected()
 void MainWindow::slotReadyRead()
 {
     QByteArray data = _socket->readAll();
+    qDebug() << "data rx:" << data;
     _parseData(data);
 }
 
@@ -120,11 +121,21 @@ void MainWindow::_parseData(QByteArray data)
 
 void MainWindow::_parseJson(QJsonDocument json)
 {
+    qDebug() << __FUNCTION__;
     QJsonObject obj = json.object();
-    QVariantMap map = obj.toVariantMap();
 
-    QString src = map.value("src").toString();
-    QByteArray data = QByteArray::fromBase64(map.value("data").toByteArray());
+
+    QString src = obj.value("src").toString();
+    QJsonObject data_obj = obj.value("data").toObject();
+//    QString data_type = data_obj.value("type").toString();
+    QString data_format = data_obj.value("format").toString();
+
+    QByteArray data_serial;
+    if(data_format == "serial")
+    {
+        data_serial = QByteArray::fromBase64(data_obj.value("data").toString().toUtf8());
+    }
+
     QString text = "";
 
     if(src == "client")
@@ -142,16 +153,21 @@ void MainWindow::_parseJson(QJsonDocument json)
 
     if(ui->comboFormat->currentText() == "HEX")
     {
-
-        foreach(char c, data)
+        if(data_format == "serial")
         {
-            text += QString().sprintf("%02X ", c & 0xFF);
+            foreach(char c, data_serial)
+            {
+                text += QString().sprintf("%02X ", c & 0xFF);
+            }
+            ui->textWindow->insertPlainText(text);
         }
-        ui->textWindow->insertPlainText(text);
     }
     else if(ui->comboFormat->currentText() == "ASCII")
     {
-        ui->textWindow->insertPlainText(QString(data));
+        if(data_format == "serial")
+        {
+            ui->textWindow->insertPlainText(QString(data_serial));
+        }
     }
     else if(ui->comboFormat->currentText() == "JSON")
     {
@@ -159,7 +175,10 @@ void MainWindow::_parseJson(QJsonDocument json)
     }
     else if(ui->comboFormat->currentText() == "PACKET")
     {
-        _protocol->parseData(data, true);
+        if(data_format == "serial")
+        {
+            _protocol->parseData(data_serial, true);
+        }
     }
 
     ui->textWindow->ensureCursorVisible();

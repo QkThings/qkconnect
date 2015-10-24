@@ -22,10 +22,10 @@ CLHandler::CLHandler(QCoreApplication *app, QObject *parent) :
     QObject(parent),
     _app(app)
 {
-
     connThread = 0;
     connectServerThread = 0;
     spyServerThread = 0;
+    _verbose = false;
 }
 
 void CLHandler::run()
@@ -43,6 +43,10 @@ void CLHandler::run()
                                   tr("Show help."));
     parser.addOption(optionHelp);
 
+    QCommandLineOption optionVerbose(QStringList() << "verbose",
+                                   tr("Verbose mode"));
+    parser.addOption(optionVerbose);
+
     QCommandLineOption optionParse(QStringList() << "p" << "parse",
                                    tr("Parse bytestream into packets."));
     parser.addOption(optionParse);
@@ -56,6 +60,8 @@ void CLHandler::run()
     parser.addOption(optionListSerial);
 
     parser.process(*_app);
+
+    _verbose = parser.isSet(optionVerbose);
 
     if(parser.isSet(optionHelp)) { _showHelp(parser); _exit(0); }
 
@@ -81,12 +87,14 @@ void CLHandler::run()
     bool parseMode = parser.isSet(optionParse);
     bool joinFragments = parser.isSet(optionJoinFragments);
 
-    qDebug("> Server:     %s %d (spy:%d)",
+    qDebug("Server:     %s %d (spy:%d)",
             serverIP.toStdString().c_str(),
             serverPort, spyServerPort);
-    qDebug("> Connection: %s", connType.toStdString().c_str());
-    qDebug() << "> Parameters:" << connParams;
-    qDebug() << "> Parse mode:" << parseMode;
+    qDebug("Connection: %s", connType.toStdString().c_str());
+    qDebug() << "Parameters:" << connParams;
+    qDebug() << "Parse? " << parseMode;
+    qDebug() << "Join?  " << joinFragments;
+    qDebug() << "Verbose" << _verbose;
 
     connThread = new QThread(this);
     QkConn::Descriptor connDesc;
@@ -112,7 +120,7 @@ void CLHandler::run()
         _exit(1);
     }
 
-    qDebug() << "Type 'quit' to quit";
+    qDebug() << "Need help? Type 'help'";
 
     conn->moveToThread(connThread);
     connect(connThread, SIGNAL(started()), conn, SLOT(open()));
@@ -129,7 +137,7 @@ void CLHandler::run()
 
     connectServerThread = new QThread(this);
     connectServer = new QkConnectServer(serverIP, serverPort);
-    connectServer->setParseMode(parseMode);
+    //connectServer->setParseMode(parseMode);
     int options;
     if(joinFragments)
         options |= QkConnectServer::joinFragments;
@@ -142,8 +150,10 @@ void CLHandler::run()
     connect(connectServerThread, SIGNAL(finished()), connectServerThread, SLOT(deleteLater()));
 
     connect(connectServer, SIGNAL(message(int,QString)), this, SLOT(_slotMessage(int,QString)), Qt::DirectConnection);
-    connect(connectServer, SIGNAL(dataIn(QByteArray)), conn, SLOT(sendData(QByteArray)));
-    connect(conn, SIGNAL(dataIn(QByteArray)), connectServer, SLOT(sendData(QByteArray)));
+    //connect(connectServer, SIGNAL(dataIn(QByteArray)), conn, SLOT(sendData(QByteArray)));
+    //connect(conn, SIGNAL(dataIn(QByteArray)), connectServer, SLOT(sendData(QByteArray)));
+    connect(connectServer, SIGNAL(packetIn(QJsonDocument)), conn, SLOT(sendPacket(QJsonDocument)));
+    connect(conn, SIGNAL(packetIn(QJsonDocument)), connectServer, SLOT(sendPacket(QJsonDocument)));
 
     connectServerThread->start();
     if(_waitServerReady(connectServer) != QkServer::Connected)
@@ -177,15 +187,21 @@ void CLHandler::run()
 
     while(true)
     {
+//        cout << "> ";
+//        cout.flush();
         QString inputText = cin.readLine();
 
         if(!inputText.isEmpty())
         {
             if(inputText == "quit")
                 break;
+            else if(inputText == "help")
+            {
+                _clHelp();
+            }
             else
             {
-                cout << inputText << "\n";
+                cout << "Unknown command: " << inputText << "\n";
                 cout.flush();
             }
         }
@@ -246,14 +262,20 @@ QkServer::Status CLHandler::_waitServerReady(QkServer *server)
 
 void CLHandler::_slotDataToConn(QByteArray data)
 {
-    cout << "--> " <<  data << "\n";
-    cout.flush();
+    if(_verbose)
+    {
+        cout << "--> " <<  data << "\n";
+        cout.flush();
+    }
 }
 
 void CLHandler::_slotDataToClient(QByteArray data)
 {
-    cout << "<-- " <<  data << "\n";
-    cout.flush();
+    if(_verbose)
+    {
+        cout << "<-- " <<  data << "\n";
+        cout.flush();
+    }
 }
 
 void CLHandler::_slotMessage(int type, QString message, bool timestamp)
@@ -281,5 +303,11 @@ void CLHandler::_showHelp(const QCommandLineParser &parser)
     qDebug() << "loopback";
     qDebug() << "serial           <portname> <baudrate> <dtr>";
     qDebug() << "";
+}
+
+void CLHandler::_clHelp()
+{
+    cout << "quit      Quit" << "\n";
+    cout.flush();
 }
 

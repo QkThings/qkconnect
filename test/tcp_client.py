@@ -46,7 +46,14 @@ if __name__ == "__main__":
 		if inputText == "quit":
 			break
 		else:
-			client.send(inputText)
+			data_to_send = json.dumps({
+					"type": "data",
+					"format": "serial",
+					"data": inputText
+				}
+				)
+			print data_to_send
+			client.send(data_to_send)
 
 	client.disconnect()
 	print "done!"

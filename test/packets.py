@@ -4,6 +4,7 @@ import socket
 import threading
 import select
 import time
+import base64
 
 class TcpClient(object):
 	def __init__(self):
@@ -36,11 +37,10 @@ def main():
 	client = TcpClient()
 	client.connect("localhost", 1234)
 	
-	pkt_search = [0x00, 0x00, 0x01, 0x06]
-	
-	pkt_dict = {}
-	pkt_dict["search"] = pkt_search
-	
+	pkt_dict = {
+	"search": [0x00, 0x00, 0x01, 0x06]
+	}
+
 	print "Available keys:"
 	print pkt_dict.keys()
 	print "Type a key or 'quit' to quit:"
@@ -50,16 +50,24 @@ def main():
 		if inputText == "quit":
 			break
 		else:
-			if inputText in pkt_dict.keys():
-				buf = ""
-				buf += chr(0x55)
-				for b in pkt_dict[inputText]:
-					buf += chr(b)
-				buf += chr(0x55)
-				client.send(buf)
+			fields = inputText.split(' ')
+			if len(fields) == 3:
+				print "fields:", fields
+				pkt_id = int(fields[0])
+				pkt_code = fields[1]
+				pkt_data = json.loads(fields[2])
+				data_to_send = json.dumps({ "pkt": {
+					"code": pkt_code,
+					"id": pkt_id,
+					str(pkt_code): pkt_data
 
+				}})
+				print data_to_send
+				#for i in range(1,100):
+				client.send(data_to_send)
 			else:
-				print "unknown key"
+				print("Invalid fields. Usage: <id> <code> <json_data>")
+
 
 	client.disconnect()
 	print "done!"

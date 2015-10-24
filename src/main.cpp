@@ -25,5 +25,7 @@ int main(int argc, char *argv[])
     QTimer::singleShot(0, &clhandler, SLOT(run()));
 
     int exitCode = a.exec();
+
+    cout << "Exit (" << exitCode << ")\n";
     return exitCode;
 }

@@ -34,6 +34,7 @@ public slots:
     void _slotDataToConn(QByteArray data);
 
 private:
+    void _clHelp();
     void _showHelp(const QCommandLineParser &parser);
     void _quitThreads();
     QkConn::Status _waitConnReady(QkConn *conn);
@@ -47,6 +48,7 @@ private:
     QkSpyServer *spyServer;
     QkConn *conn;
     QMutex _mutex;
+    bool _verbose;
 
 };
 

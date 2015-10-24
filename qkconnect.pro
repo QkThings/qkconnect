@@ -8,8 +8,9 @@ QT       += core network serialport
 QT       -= gui
 
 TARGET = qkconnect
-CONFIG   += console
-CONFIG   -= app_bundle
+CONFIG += console
+CONFIG -= app_bundle
+CONFIG += c++11
 
 TEMPLATE = app
 
@@ -32,7 +33,9 @@ src/main.cpp \
     src/qkserver.cpp \
     src/qkspyserver.cpp \
     ../utils/qkutils.cpp \
-    ../utils/qkcore.cpp
+    ../utils/qkcore.cpp \
+    src/qkprotocol.cpp \
+    src/qkprotocolserial.cpp
 
 HEADERS += \
     include/qkconnect_global.h \
@@ -47,7 +50,9 @@ HEADERS += \
     src/qkserver.h \
     src/qkspyserver.h \
     ../utils/qkutils.h \
-    ../utils/qkcore.h
+    ../utils/qkcore.h \
+    src/qkprotocol.h \
+    src/qkprotocolserial.h
 
 CONFIG(debug, debug|release){
     DESTDIR = debug

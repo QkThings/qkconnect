@@ -5,6 +5,7 @@
 #include <QObject>
 
 class QSerialPort;
+class QkProtocolSerial;
 
 class QkConnSerial : public QkConn
 {
@@ -20,11 +21,13 @@ public slots:
     bool open();
     void close();
     void sendData(QByteArray data);
+    void sendPacket(QJsonDocument doc);
 
 private slots:
     void _slotReadyRead();
 
 private:
+    QkProtocolSerial *_protocol;
     QSerialPort *_sp;
     QString _portName;
     int _baudRate;

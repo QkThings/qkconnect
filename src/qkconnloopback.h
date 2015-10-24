@@ -16,6 +16,7 @@ public slots:
     bool open();
     void close();
     void sendData(QByteArray data);
+    void sendPacket(QJsonDocument doc);
 
 
 };
